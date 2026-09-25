@@ -180,11 +180,18 @@ for w in "${WORKTREES[@]}"; do
 done
 
 # --- clean up the task directory -------------------------------------------
-rm -f "$TASK_DIR/README.md"
+# Empty the task directory of stray files (IDE caches, the README breadcrumb,
+# etc.). A worktree kept by a failed removal above still holds its `.git`
+# pointer and is left untouched.
+find "$TASK_DIR" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | \
+  while IFS= read -r -d '' leftover; do
+    [ -e "$leftover/.git" ] && continue
+    rm -rf -- "$leftover" || true
+  done
 if rmdir "$TASK_DIR" 2>/dev/null; then
   echo "task directory removed: $TASK_DIR"
 else
-  echo "note: task directory not empty, kept: $TASK_DIR"
+  echo "note: task directory kept (worktrees still present): $TASK_DIR"
 fi
 
 if [ "$FAILED" -eq 1 ]; then

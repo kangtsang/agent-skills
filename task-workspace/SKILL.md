@@ -112,10 +112,11 @@ When the user asks to finish or clean up a task, run:
 bash <skill-dir>/scripts/task-done.sh <task-name> --tasks-root <tasks-root>
 ```
 
-By default this **only removes the worktrees and keeps the branches** — it
-does not merge and does not delete a branch unless the user explicitly asked
-for those. Merging and branch deletion are separate, explicit steps; confirm
-each with the user (AskUserQuestion) before running the script:
+By default this **removes the worktrees, empties the task directory of stray
+files, and keeps the branches** — it does not merge and does not delete a
+branch unless the user explicitly asked for those. Merging and branch
+deletion are separate, explicit steps; confirm each with the user
+(AskUserQuestion) before running the script:
 
 1. **Merge?** Default no. Only when the user explicitly says to merge, pass
    `--merge`. When merging, ask which target branch to merge into and pass
@@ -144,6 +145,8 @@ Details:
   `master`); override with `--target <branch>`.
 - On a merge conflict it aborts the merge and keeps that worktree and branch
   for manual handling; other repositories still complete.
+- Stray files left in the task directory (e.g. `.idea`, editor caches) are
+  removed; a worktree kept on failure is left untouched.
 - `--no-merge` is an explicit alias for the default (no merge).
 - `--delete-branch` uses `git branch -d` (safe: refuses an unmerged branch)
   unless `--force` is also given.
