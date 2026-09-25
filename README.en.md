@@ -1,0 +1,55 @@
+# Agent Skills
+
+A collection of reusable [Claude Code](https://claude.com/claude-code) skills. Each
+skill lives in its own top-level directory as a self-contained `SKILL.md` (plus any
+helper scripts it needs), following the same layout as the official
+[`anthropics/skills`](https://github.com/anthropics/skills) repository.
+
+> 中文版：[README.md](README.md)
+
+## Skills
+
+| Skill | Description |
+| ----- | ----------- |
+| [task-workspace](task-workspace/SKILL.md) | Create and manage isolated per-task git worktree workspaces that span multiple repositories under a source root. |
+
+## Install
+
+Copy (or symlink) the skill folder you want into your personal skills directory:
+
+```bash
+# Linux / macOS
+cp -r task-workspace ~/.claude/skills/
+
+# Windows (Git Bash)
+cp -r task-workspace "$USERPROFILE/.claude/skills/"
+```
+
+Or symlink it so you always get updates when you pull this repo:
+
+```bash
+ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
+```
+
+Restart Claude Code (or start a new session) and the skill will be available.
+
+## Usage
+
+Each skill documents its own usage inside its `SKILL.md`. For `task-workspace`, the
+entry points are the scripts under `task-workspace/scripts/`:
+
+- `task-new.sh` — create a task workspace
+- `task-done.sh` — clean up / merge a finished task
+- `task-list.sh` — list existing tasks
+- `suggest-tasks-root.sh` — recommend where to put the task container
+
+See [`task-workspace/SKILL.md`](task-workspace/SKILL.md) for the full workflow.
+
+## Adding a skill
+
+Drop a new folder at the repo root containing a `SKILL.md` (with the required
+`name` / `description` frontmatter), then add a row to the table above.
+
+## License
+
+[MIT](LICENSE)
