@@ -181,11 +181,14 @@ done
 
 # --- unshare auto-memory (only if this task shared it) ---------------------
 if [ -f "$TASK_DIR/README.md" ] && grep -q 'Share memory: yes' "$TASK_DIR/README.md"; then
-  for w in "${WORKTREES[@]}"; do
-    link="$(memory_dir_for "$(cygpath -w "$w")")"
-    unshare_memory "$link"
-    rmdir "$(dirname "$link")" 2>/dev/null || true
-  done
+  agent="$(sed -n 's/^- Agent: //p' "$TASK_DIR/README.md" | head -1 | tr -d '`')"
+  [ -n "$agent" ] || agent=claude
+  hook="$(memory_hook_for "$agent")"
+  if [ -x "$hook" ]; then
+    for w in "${WORKTREES[@]}"; do
+      bash "$hook" unlink "$w"
+    done
+  fi
 fi
 
 # --- clean up the task directory -------------------------------------------

@@ -43,6 +43,10 @@ entry points are the scripts under `task-workspace/scripts/`:
 - `task-list.sh` — list existing tasks
 - `suggest-tasks-root.sh` — recommend where to put the task container
 
+The scripts are agent-agnostic and reusable from Claude Code / opencode / dsh /
+codex; `--share-memory` adapts per agent via `adapters/<agent>/memory-hook.sh`
+(bundled: `claude` / `opencode` / `dsh` / `codex`).
+
 ### Natural-language prompt examples
 
 Once installed, just invoke `/task-workspace` in plain language — no need to

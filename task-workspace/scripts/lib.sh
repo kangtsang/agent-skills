@@ -57,13 +57,6 @@ require_isolated() {
   return 0
 }
 
-# --- Claude Code auto-memory sharing (experimental) ------------------------
-# Claude Code keys per-project state (including auto-memory) under
-#   ~/.claude/projects/<encoded-cwd>/memory
-# where <encoded-cwd> is the absolute working-directory path with every
-# ':', '\', '/' replaced by '-'. This layout is undocumented, so --share-memory
-# relies on it and can silently break if the encoding or location changes.
-
 is_windows() {
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) return 0 ;;
@@ -71,36 +64,16 @@ is_windows() {
   esac
 }
 
-claude_projects_dir() {
-  printf '%s/.claude/projects' "$HOME"
-}
+# --- agent adapters ---------------------------------------------------------
+# The scripts are agent-agnostic; the one agent-specific concern is how an
+# agent's auto-memory is shared across worktrees, which is delegated to a
+# pluggable "memory hook". Each adapter under <skill>/adapters/ provides an
+# executable implementing two subcommands:
+#   memory-hook.sh link   <worktree-posix> <source-posix>
+#   memory-hook.sh unlink <worktree-posix>
+ADAPTERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/adapters"
 
-# Encoded per-project directory name for an absolute Windows path.
-encode_project_dir() {
-  printf '%s' "$1" | sed 's#[\\/:]#-#g'
-}
-
-# POSIX path of the auto-memory directory for a project (absolute Windows path).
-memory_dir_for() {
-  printf '%s/%s/memory' "$(claude_projects_dir)" "$(encode_project_dir "$1")"
-}
-
-# Link a worktree's memory dir to the source's with a directory junction
-# (works without admin). $1 and $2 are POSIX paths; returns non-zero on failure.
-share_memory() {
-  local link target
-  case "$1$2" in
-    *\'*) echo "task-workspace: share-memory does not support paths containing '" >&2; return 1 ;;
-  esac
-  link="$(cygpath -w "$1")"
-  target="$(cygpath -w "$2")"
-  mkdir -p "$(dirname "$1")" "$2"
-  powershell.exe -NoProfile -Command \
-    "New-Item -ItemType Junction -Path '$link' -Target '$target' -ErrorAction Stop" >/dev/null 2>&1
-  [ -d "$1" ]
-}
-
-# Remove the junction only (never the target's contents); idempotent.
-unshare_memory() {
-  cmd //c rmdir "$(cygpath -w "$1")" >/dev/null 2>&1 || true
+# Path of the memory hook for an agent (default: claude).
+memory_hook_for() {
+  printf '%s/%s/memory-hook.sh' "$ADAPTERS_DIR" "$1"
 }

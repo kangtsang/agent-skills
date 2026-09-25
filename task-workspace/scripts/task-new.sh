@@ -28,9 +28,10 @@
 #   --prefix <p>        branch prefix (default: feat/)
 #   --base <ref>        start-point for the new branch in each repository
 #                       (default: each repository's current HEAD)
-#   --share-memory      (experimental, Windows) link each worktree's auto-memory
-#                       to the source root's via a directory junction so all
-#                       sessions share one memory
+#   --share-memory      link each worktree's auto-memory to the source root's
+#                       via the agent's memory hook (see --agent); off by default
+#   --agent <name>      agent whose memory hook to use for --share-memory
+#                       (default: claude, or $TASK_WORKSPACE_AGENT)
 #   --push              push the new branch to origin and set upstream tracking
 #                       (only when the user explicitly asks; default is local)
 #   -h, --help          show this help
@@ -45,7 +46,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 usage() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"
 }
 
 # --- defaults -------------------------------------------------------------
@@ -55,6 +56,7 @@ PREFIX="${TASK_BRANCH_PREFIX:-feat/}"
 BASE=""
 TASK=""
 REPOS=()
+AGENT="${TASK_WORKSPACE_AGENT:-claude}"
 SHARE_MEMORY=0
 MEMORY_SHARED=0
 PUSH=0
@@ -70,6 +72,7 @@ while [ $# -gt 0 ]; do
     --prefix)     PREFIX="$2";     shift 2 ;;
     --base)       BASE="$2";       shift 2 ;;
     --share-memory) SHARE_MEMORY=1; shift ;;
+    --agent)       AGENT="$2";      shift 2 ;;
     --push)        PUSH=1;         shift ;;
     --)           shift; break ;;
     -*)           echo "task-new: unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -186,16 +189,13 @@ done
 
 # --- optionally share auto-memory with the source session ------------------
 if [ "$SHARE_MEMORY" -eq 1 ]; then
-  if ! is_windows; then
-    echo "task-new: --share-memory is Windows-only; skipping" >&2
+  hook="$(memory_hook_for "$AGENT")"
+  if [ ! -x "$hook" ]; then
+    echo "task-new: no memory hook for agent '$AGENT' ($hook); --share-memory skipped" >&2
   else
-    src_mem="$(memory_dir_for "$(cygpath -w "$SRC")")"
-    mkdir -p "$src_mem"
     for repo in "${REPOS[@]}"; do
-      wt="$(memory_dir_for "$(cygpath -w "$TASK_DIR/$(basename "$repo")")")"
-      if share_memory "$wt" "$src_mem"; then
+      if bash "$hook" link "$TASK_DIR/$(basename "$repo")" "$SRC"; then
         MEMORY_SHARED=1
-        echo "  shared memory: $(basename "$repo")"
       fi
     done
   fi
@@ -213,6 +213,7 @@ fi
   fi
   echo "- Created: $(date '+%Y-%m-%d %H:%M')"
   echo "- Source root: \`$SRC\`"
+  echo "- Agent: \`$AGENT\`"
   if [ "$MEMORY_SHARED" -eq 1 ]; then
     echo "- Share memory: yes"
   fi
@@ -232,9 +233,9 @@ fi
 } > "$TASK_DIR/README.md"
 
 echo "workspace is ready: $TASK_DIR"
-echo "Start a session there with cd $TASK_DIR && claude."
+echo "Start a session there with cd $TASK_DIR && $AGENT."
 if is_windows; then
-  echo "  Windows native: cd $(cygpath -w "$TASK_DIR") && claude."
+  echo "  Windows native: cd $(cygpath -w "$TASK_DIR") && $AGENT."
 fi
 if [ "$PUSH_FAILED" -eq 1 ]; then
   echo "warning: one or more branches failed to push (kept local)" >&2

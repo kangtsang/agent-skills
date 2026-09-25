@@ -39,6 +39,10 @@ ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
 - `task-list.sh` — 列出已有任务
 - `suggest-tasks-root.sh` — 推荐任务容器存放位置
 
+脚本本身与 agent 无关，可直接被 Claude Code / opencode / dsh / codex 复用；
+`--share-memory` 通过 `adapters/<agent>/memory-hook.sh` 适配各 agent（内置
+`claude` / `opencode` / `dsh` / `codex`）。
+
 ### 自然语言提示词示例
 
 安装后，直接用自然语言调用 `/task-workspace` 即可，无需记忆脚本参数。

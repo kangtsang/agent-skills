@@ -87,9 +87,12 @@ Details of `task-new.sh`:
 - It writes a `README.md` into the task directory recording the task name,
   branch, base, repositories, and the conventions below, so the session has
   the rules in front of it.
-- `--share-memory` links each worktree's auto-memory directory to the source
-  root's via a directory junction (Windows only), so all sessions in the task
-  share one memory. See "Sharing auto-memory" below.
+- `--share-memory` shares each worktree's auto-memory with the source root via
+  the agent's memory hook (see `--agent` below); off by default. See "Sharing
+  auto-memory" below.
+- `--agent <name>` selects which agent's memory hook `--share-memory` uses
+  (default `claude`, or `$TASK_WORKSPACE_AGENT`). The scripts themselves are
+  agent-agnostic.
 - By default the new branch is **local-only** (no upstream). `--push` pushes it
   to `origin` and sets upstream tracking — only pass it when the user explicitly
   asks to create/associate a remote branch; do not prompt for it otherwise.
@@ -110,28 +113,39 @@ subfolders are git worktrees of different repositories), apply these rules:
 - If another session or process created the task workspace, follow the
   `README.md` inside it instead of creating a new one.
 
-## Sharing auto-memory across workspaces (experimental)
+## Sharing auto-memory across workspaces (optional)
 
-By default each worktree is a *separate* Claude Code project: auto-memory is
-keyed to the working directory's absolute path, so a session in
-`E:\worktree-space\<task>\<repo>` does **not** see memories saved while working
-in the source root. `--share-memory` links each worktree's memory directory to
-the source root's with a directory junction (Windows only, no admin needed):
+Each agent stores memory differently, and only Claude Code keys auto-memory by
+working directory. `--share-memory` delegates to a pluggable per-agent "memory
+hook" (`adapters/<agent>/memory-hook.sh`) so worktree sessions share the source
+session's memory:
+
+| agent | memory location | hook behaviour |
+| ----- | --------------- | -------------- |
+| `claude` | `~/.claude/projects/<encoded-cwd>/memory` (per-directory) | creates a directory junction |
+| `opencode` | in-repo `AGENTS.md` / `CLAUDE.md` | no-op (already shared) |
+| `dsh` | `$DSH_HOME/AGENTS.md` + in-repo `AGENTS.md` | no-op (already shared) |
+| `codex` | `~/.codex/` (global) + in-repo `AGENTS.md` | no-op (already shared) |
 
 ```bash
-bash <skill-dir>/scripts/task-new.sh <task> --share-memory \
+bash <skill-dir>/scripts/task-new.sh <task> --share-memory --agent claude \
   --src <source-root> --tasks-root <tasks-root>
 ```
 
-`task-done.sh` removes the junction when finishing the task; the shared memory
-itself is never deleted (only the link). Caveats:
+Only `claude` needs a junction; the other three read `AGENTS.md`/global state
+that already travels with (or is shared by) every worktree, so their hooks do
+nothing. `task-done.sh` runs the same hook's `unlink` when finishing; the shared
+memory itself is never deleted.
 
-- Relies on Claude Code's **undocumented** per-project directory layout
-  (`~/.claude/projects/<encoded-cwd>/memory`). If that layout or its path
-  encoding changes in a future release, sharing silently stops working.
-- Windows-only (uses directory junctions via PowerShell).
-- Prefer putting genuinely project-shared facts in the repo's `CLAUDE.md`,
-  which follows every worktree automatically and needs no mechanism.
+Caveats:
+
+- The `claude` hook relies on Claude Code's **undocumented** per-project layout
+  (`~/.claude/projects/<encoded-cwd>/memory`); if that layout or its path
+  encoding changes, sharing silently stops working.
+- The `claude` junction is Windows-only (via PowerShell); the no-op hooks work
+  anywhere.
+- Prefer putting genuinely project-shared facts in the repo's `AGENTS.md` /
+  `CLAUDE.md`, which follow every worktree automatically and need no mechanism.
 
 ## Finishing a task
 
