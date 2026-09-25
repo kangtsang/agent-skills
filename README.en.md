@@ -43,6 +43,40 @@ entry points are the scripts under `task-workspace/scripts/`:
 - `task-list.sh` — list existing tasks
 - `suggest-tasks-root.sh` — recommend where to put the task container
 
+### Natural-language prompt examples
+
+Once installed, just invoke `/task-workspace` in plain language — no need to
+remember script flags.
+
+**Create a task workspace**
+
+```
+/task-workspace create a new workspace fix-login
+/task-workspace start a task named add-payment
+/task-workspace create task hotfix-auth, branch from main
+/task-workspace create a workspace api-v2 with only the backend and frontend repos
+```
+
+The skill asks for the task name when it is missing, and confirms the source
+root, container location, and branch start point before creating anything.
+
+**List tasks**
+
+```
+/task-workspace list all task workspaces
+```
+
+**Finish / clean up**
+
+```
+/task-workspace finish the fix-login task
+/task-workspace clean up the test workspace but keep the branch
+/task-workspace finish add-payment, merge into main and delete the branch
+```
+
+Merging and branch deletion are confirmed first; by default only the worktrees
+are removed and branches are kept.
+
 See [`task-workspace/SKILL.md`](task-workspace/SKILL.md) for the full workflow.
 
 ## Adding a skill

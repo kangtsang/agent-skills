@@ -39,6 +39,37 @@ ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
 - `task-list.sh` — 列出已有任务
 - `suggest-tasks-root.sh` — 推荐任务容器存放位置
 
+### 自然语言提示词示例
+
+安装后，直接用自然语言调用 `/task-workspace` 即可，无需记忆脚本参数。
+
+**创建任务工作区**
+
+```
+/task-workspace 创建新的工作区 fix-login
+/task-workspace 新建一个任务，名字叫 add-payment
+/task-workspace 创建任务 hotfix-auth，分支从 main 开始
+/task-workspace 建一个工作区 api-v2，只包含 backend 和 frontend 两个仓库
+```
+
+任务名缺失时技能会追问；源码根、容器位置、分支起点也会先确认再创建。
+
+**查看任务**
+
+```
+/task-workspace 列出所有任务工作区
+```
+
+**收尾 / 清理**
+
+```
+/task-workspace 完成 fix-login 这个任务
+/task-workspace 清理 test 工作区，但保留分支
+/task-workspace 完成 add-payment，合并到 main 并删除分支
+```
+
+合并与删除分支会先确认；默认只移除 worktree、保留分支。
+
 完整流程见 [`task-workspace/SKILL.md`](task-workspace/SKILL.md)。
 
 ## 添加新技能
