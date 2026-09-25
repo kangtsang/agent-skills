@@ -68,9 +68,8 @@ When the user asks to create a task workspace, follow this flow — do not run
    a specific ref; the same ref is applied to every repository.
 6. **Create it**:
    `bash <skill-dir>/scripts/task-new.sh <task> [repos...] --src <source-root> --tasks-root <chosen-location> [--base <ref>]`
-7. **Report** to the user: the task directory, the branch name
-   (`feat/<task>`), and how to start the session there:
-   `cd <tasks-root>/<task> && claude`
+7. **Report** to the user: the workspace is ready (the task directory
+   path), plus the branch name (`feat/<task>`).
 
 Details of `task-new.sh`:
 

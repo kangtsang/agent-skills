@@ -182,7 +182,4 @@ done
   echo "  via \`task-done.sh $TASK\`."
 } > "$TASK_DIR/README.md"
 
-echo
-echo "Task workspace ready: $TASK_DIR"
-echo "Start the agent session there:"
-echo "  cd $TASK_DIR && claude"
+echo "workspace ready $TASK_DIR"
