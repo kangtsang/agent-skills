@@ -190,7 +190,7 @@ done
 # --- optionally share auto-memory with the source session ------------------
 if [ "$SHARE_MEMORY" -eq 1 ]; then
   hook="$(memory_hook_for "$AGENT")"
-  if [ ! -x "$hook" ]; then
+  if [ ! -f "$hook" ]; then
     echo "task-new: no memory hook for agent '$AGENT' ($hook); --share-memory skipped" >&2
   else
     for repo in "${REPOS[@]}"; do

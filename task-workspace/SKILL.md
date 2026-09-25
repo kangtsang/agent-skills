@@ -117,8 +117,8 @@ subfolders are git worktrees of different repositories), apply these rules:
 
 Each agent stores memory differently, and only Claude Code keys auto-memory by
 working directory. `--share-memory` delegates to a pluggable per-agent "memory
-hook" (`adapters/<agent>/memory-hook.sh`) so worktree sessions share the source
-session's memory:
+hook" (`adapters/claude.sh` for the junction, `adapters/noop.sh` for the rest)
+so worktree sessions share the source session's memory:
 
 | agent | memory location | hook behaviour |
 | ----- | --------------- | -------------- |
@@ -155,11 +155,10 @@ When the user asks to finish or clean up a task, run:
 bash <skill-dir>/scripts/task-done.sh <task-name> --tasks-root <tasks-root>
 ```
 
-By default this **removes the worktrees, empties the task directory of stray
-files, and keeps the branches** — it does not merge and does not delete a
-branch unless the user explicitly asked for those. Merging and branch
-deletion are separate, explicit steps; confirm each with the user
-(AskUserQuestion) before running the script:
+By default this **removes the worktrees, keeps the branches, and keeps any
+stray files** in the task directory — it does not merge, delete a branch, or
+delete stray files unless the user explicitly asked. Confirm each destructive
+step with the user (AskUserQuestion) before running the script:
 
 1. **Merge?** Default no. Only when the user explicitly says to merge, pass
    `--merge`. When merging, ask which target branch to merge into and pass
@@ -168,6 +167,13 @@ deletion are separate, explicit steps; confirm each with the user
 2. **Delete branch?** Default no. Only when the user explicitly says to
    delete the branch, and only after it has been merged, pass
    `--delete-branch` (requires `--merge`).
+3. **Stray files?** List the task directory's top-level entries; anything that
+   is not a worktree (a folder with a `.git` file) and not the `README.md`
+   breadcrumb is a stray file (agent-generated plans/notes, editor caches,
+   ...). If any exist, show them and ask the user (multi-select) which to
+   *keep*. Pass `--clean-stray` plus `--keep <name>` for each entry they keep;
+   if they keep nothing, pass just `--clean-stray`; if they keep everything,
+   pass neither.
 
 Examples:
 
@@ -188,8 +194,10 @@ Details:
   `master`); override with `--target <branch>`.
 - On a merge conflict it aborts the merge and keeps that worktree and branch
   for manual handling; other repositories still complete.
-- Stray files left in the task directory (e.g. `.idea`, editor caches) are
-  removed; a worktree kept on failure is left untouched.
+- Stray files left in the task directory (e.g. agent plans/notes, `.idea`,
+  editor caches) are kept by default and listed. Pass `--clean-stray` to remove
+  them, adding `--keep <name>` for each entry to retain. A worktree kept on
+  failure is left untouched.
 - `--no-merge` is an explicit alias for the default (no merge).
 - `--delete-branch` uses `git branch -d` (safe: refuses an unmerged branch)
   unless `--force` is also given.

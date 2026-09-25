@@ -43,9 +43,21 @@ entry points are the scripts under `task-workspace/scripts/`:
 - `task-list.sh` — list existing tasks
 - `suggest-tasks-root.sh` — recommend where to put the task container
 
-The scripts are agent-agnostic and reusable from Claude Code / opencode / dsh /
-codex; `--share-memory` adapts per agent via `adapters/<agent>/memory-hook.sh`
-(bundled: `claude` / `opencode` / `dsh` / `codex`).
+### Using from other agents (opencode / dsh / codex)
+
+The scripts are agent-agnostic; any agent that can run bash can use them
+directly:
+
+```bash
+bash task-workspace/scripts/task-new.sh <task> --src <source-root> --tasks-root <container>
+```
+
+Create / list / finish and `--push` behave the same for every agent (see the
+natural-language examples below). The only agent-specific bit is `--agent
+<name>` + `--share-memory`: only Claude Code keys auto-memory by working
+directory, so it needs `--share-memory --agent claude` to create a junction;
+opencode / dsh / codex keep memory in in-repo AGENTS.md or global dirs, so
+`--share-memory` is a no-op.
 
 ### Natural-language prompt examples
 
@@ -84,8 +96,10 @@ for them (mapping to `--share-memory` / `--push` respectively).
 /task-workspace finish add-payment, merge into main and delete the branch
 ```
 
-Merging and branch deletion are confirmed first; by default only the worktrees
-are removed and branches are kept.
+Merging, branch deletion, and stray-file cleanup (plans/notes not under git)
+are each confirmed first — cleanup lets you pick which stray files to keep; by
+default only the worktrees are removed and both branches and stray files are
+kept.
 
 See [`task-workspace/SKILL.md`](task-workspace/SKILL.md) for the full workflow.
 

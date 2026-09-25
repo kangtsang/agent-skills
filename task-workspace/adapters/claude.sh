@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# memory-hook.sh - Claude Code adapter: share auto-memory across worktrees.
+# claude.sh - Claude Code memory hook: share auto-memory across worktrees.
 #
 # Claude Code keys auto-memory by working directory:
 #   ~/.claude/projects/<encoded-cwd>/memory
@@ -7,16 +7,16 @@
 # ':', '\', '/' replaced by '-'. This layout is undocumented, so this hook is
 # experimental and can silently break if the encoding or location changes.
 #
-# Only Claude Code isolates memory per directory; the opencode/dsh/codex
-# adapters are no-ops because their memory is in-repo or global.
+# Only Claude Code isolates memory per directory; opencode/dsh/codex share the
+# noop.sh hook because their memory is in-repo or global.
 #
 # Usage:
-#   memory-hook.sh link   <worktree-posix> <source-posix>
-#   memory-hook.sh unlink <worktree-posix>
+#   claude.sh link   <worktree-posix> <source-posix>
+#   claude.sh unlink <worktree-posix>
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/../../scripts/lib.sh"
+source "$SCRIPT_DIR/../scripts/lib.sh"
 
 projects_dir() {
   printf '%s/.claude/projects' "$HOME"
@@ -35,18 +35,18 @@ case "$1" in
   link)
     worktree="$2"; src="$3"
     if ! is_windows; then
-      echo "claude memory-hook: junction sharing requires Windows" >&2
+      echo "claude hook: junction sharing requires Windows" >&2
       exit 1
     fi
     link="$(memory_dir_for "$worktree")"
     target="$(memory_dir_for "$src")"
     case "$link$target" in
-      *\'*) echo "claude memory-hook: paths containing ' are not supported" >&2; exit 1 ;;
+      *\'*) echo "claude hook: paths containing ' are not supported" >&2; exit 1 ;;
     esac
     mkdir -p "$(dirname "$link")" "$target"
     powershell.exe -NoProfile -Command \
       "New-Item -ItemType Junction -Path '$(cygpath -w "$link")' -Target '$(cygpath -w "$target")' -ErrorAction Stop" >/dev/null 2>&1
-    [ -d "$link" ] || { echo "claude memory-hook: failed to create junction for '$(basename "$worktree")'" >&2; exit 1; }
+    [ -d "$link" ] || { echo "claude hook: failed to create junction for '$(basename "$worktree")'" >&2; exit 1; }
     echo "  shared memory (junction): $(basename "$worktree")"
     ;;
   unlink)
@@ -56,6 +56,6 @@ case "$1" in
     rmdir "$(dirname "$link")" 2>/dev/null || true
     ;;
   *)
-    echo "usage: memory-hook.sh link <worktree-posix> <source-posix> | unlink <worktree-posix>" >&2
+    echo "usage: claude.sh link <worktree-posix> <source-posix> | unlink <worktree-posix>" >&2
     exit 1 ;;
 esac

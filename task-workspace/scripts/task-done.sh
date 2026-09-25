@@ -21,6 +21,10 @@
 #   --target <b>    merge target branch (default: auto-detect from
 #                   origin/HEAD, then main, then master)
 #   --force         force-remove dirty worktrees and force-delete branches
+#   --clean-stray   delete stray files (non-git) left in the task directory
+#                   (default: keep them and list them)
+#   --keep <name>   with --clean-stray, keep this top-level stray entry
+#                   (repeatable; all other strays are deleted)
 #   --tasks-root <path>  task container root (default: $TASK_WORKSPACE_ROOT,
 #                   else the drive-root recommendation)
 #   -h, --help      show this help
@@ -33,7 +37,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 usage() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"
 }
 
 # --- defaults -------------------------------------------------------------
@@ -42,7 +46,9 @@ TASK=""
 MERGE=0
 DELETE_BRANCH=0
 FORCE=0
+CLEAN_STRAY=0
 TARGET=""
+KEEP=()
 
 # --- parse arguments ------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -52,6 +58,8 @@ while [ $# -gt 0 ]; do
     --no-merge)      MERGE=0;        shift ;;
     --delete-branch) DELETE_BRANCH=1; shift ;;
     --force)         FORCE=1;        shift ;;
+    --clean-stray)   CLEAN_STRAY=1;  shift ;;
+    --keep)          KEEP+=("$2");   shift 2 ;;
     --target)        TARGET="$2";    shift 2 ;;
     --tasks-root)    TASKS_ROOT="$2"; shift 2 ;;
     --)              shift; break ;;
@@ -184,7 +192,7 @@ if [ -f "$TASK_DIR/README.md" ] && grep -q 'Share memory: yes' "$TASK_DIR/README
   agent="$(sed -n 's/^- Agent: //p' "$TASK_DIR/README.md" | head -1 | tr -d '`')"
   [ -n "$agent" ] || agent=claude
   hook="$(memory_hook_for "$agent")"
-  if [ -x "$hook" ]; then
+  if [ -f "$hook" ]; then
     for w in "${WORKTREES[@]}"; do
       bash "$hook" unlink "$w"
     done
@@ -192,18 +200,44 @@ if [ -f "$TASK_DIR/README.md" ] && grep -q 'Share memory: yes' "$TASK_DIR/README
 fi
 
 # --- clean up the task directory -------------------------------------------
-# Empty the task directory of stray files (IDE caches, the README breadcrumb,
-# etc.). A worktree kept by a failed removal above still holds its `.git`
-# pointer and is left untouched.
-find "$TASK_DIR" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | \
-  while IFS= read -r -d '' leftover; do
-    [ -e "$leftover/.git" ] && continue
-    rm -rf -- "$leftover" || true
+# Always remove the script's own README breadcrumb. Other stray files (agent-
+# generated plans/notes, IDE caches, ...) are kept by default and listed. With
+# --clean-stray they are deleted except for entries named by --keep, so the
+# caller can let the user choose what to retain. A worktree kept by a failed
+# removal above still holds its `.git` pointer and is left untouched.
+rm -f "$TASK_DIR/README.md"
+
+STRAY=()
+while IFS= read -r -d '' leftover; do
+  [ -e "$leftover/.git" ] && continue   # kept worktree
+  STRAY+=("$leftover")
+done < <(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -print0 2>/dev/null)
+
+if [ ${#STRAY[@]} -gt 0 ]; then
+  kept=()
+  for s in "${STRAY[@]}"; do
+    name="$(basename "$s")"
+    keep=0
+    for k in "${KEEP[@]}"; do
+      [ "$k" = "$name" ] && keep=1
+    done
+    if [ "$CLEAN_STRAY" -eq 1 ] && [ "$keep" -eq 0 ]; then
+      rm -rf -- "$s" || true
+      echo "  removed: $name"
+    else
+      kept+=("$s")
+    fi
   done
+  if [ ${#kept[@]} -gt 0 ]; then
+    echo "  stray files kept:"
+    for s in "${kept[@]}"; do echo "    - $s"; done
+  fi
+fi
+
 if rmdir "$TASK_DIR" 2>/dev/null; then
   echo "task directory removed: $TASK_DIR"
 else
-  echo "note: task directory kept (worktrees still present): $TASK_DIR"
+  echo "note: task directory kept (worktrees or stray files still present): $TASK_DIR"
 fi
 
 if [ "$FAILED" -eq 1 ]; then

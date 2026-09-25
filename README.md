@@ -39,9 +39,19 @@ ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
 - `task-list.sh` — 列出已有任务
 - `suggest-tasks-root.sh` — 推荐任务容器存放位置
 
-脚本本身与 agent 无关，可直接被 Claude Code / opencode / dsh / codex 复用；
-`--share-memory` 通过 `adapters/<agent>/memory-hook.sh` 适配各 agent（内置
-`claude` / `opencode` / `dsh` / `codex`）。
+### 其他 agent 使用（opencode / dsh / codex）
+
+脚本本身与 agent 无关，任何能运行 bash 的 agent 都能直接用：
+
+```bash
+bash task-workspace/scripts/task-new.sh <task> --src <源码根> --tasks-root <容器>
+```
+
+创建 / 列出 / 完成及 `--push` 的用法对所有 agent 一致（见下方自然语言示例）。唯一
+agent 相关的是 `--agent <name>` + `--share-memory`：只有 Claude Code 把自动记忆按
+工作目录隔离，需 `--share-memory --agent claude` 建 junction 共享；opencode / dsh /
+codex 的记忆在仓库内 AGENTS.md 或全局目录，天然随 worktree 共享，`--share-memory`
+是 no-op。
 
 ### 自然语言提示词示例
 
@@ -76,7 +86,8 @@ ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
 /task-workspace 完成 add-payment，合并到 main 并删除分支
 ```
 
-合并与删除分支会先确认；默认只移除 worktree、保留分支。
+合并、删除分支、清理杂项文件（任务计划/笔记等未纳入 git 的文件）都会先确认，
+清理时可勾选要保留的文件/目录；默认只移除 worktree、保留分支与杂项文件。
 
 完整流程见 [`task-workspace/SKILL.md`](task-workspace/SKILL.md)。
 

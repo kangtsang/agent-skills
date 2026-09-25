@@ -67,13 +67,18 @@ is_windows() {
 # --- agent adapters ---------------------------------------------------------
 # The scripts are agent-agnostic; the one agent-specific concern is how an
 # agent's auto-memory is shared across worktrees, which is delegated to a
-# pluggable "memory hook". Each adapter under <skill>/adapters/ provides an
-# executable implementing two subcommands:
-#   memory-hook.sh link   <worktree-posix> <source-posix>
-#   memory-hook.sh unlink <worktree-posix>
+# pluggable "memory hook": an executable implementing two subcommands:
+#   hook link   <worktree-posix> <source-posix>
+#   hook unlink <worktree-posix>
+# Hooks live flat in <skill>/adapters/: claude.sh (junction) and noop.sh (for
+# agents whose memory is in-repo or global, so nothing to link).
 ADAPTERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/adapters"
 
 # Path of the memory hook for an agent (default: claude).
 memory_hook_for() {
-  printf '%s/%s/memory-hook.sh' "$ADAPTERS_DIR" "$1"
+  case "$1" in
+    claude)          printf '%s/claude.sh' "$ADAPTERS_DIR" ;;
+    opencode|dsh|codex) printf '%s/noop.sh' "$ADAPTERS_DIR" ;;
+    *)               printf '%s/%s.sh' "$ADAPTERS_DIR" "$1" ;;
+  esac
 }
