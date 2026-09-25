@@ -50,9 +50,13 @@ ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
 /task-workspace 新建一个任务，名字叫 add-payment
 /task-workspace 创建任务 hotfix-auth，分支从 main 开始
 /task-workspace 建一个工作区 api-v2，只包含 backend 和 frontend 两个仓库
+/task-workspace 创建任务 share-memory-demo，共享自动记忆
+/task-workspace 创建任务 push-demo，推送到远端并关联远端分支
 ```
 
 任务名缺失时技能会追问；源码根、容器位置、分支起点也会先确认再创建。
+
+「共享自动记忆」和「推送到远端」是可选能力：默认分支仅本地、记忆按目录隔离，只有明确说出时才启用（分别对应 `--share-memory` / `--push`）。
 
 **查看任务**
 

@@ -28,6 +28,11 @@
 #   --prefix <p>        branch prefix (default: feat/)
 #   --base <ref>        start-point for the new branch in each repository
 #                       (default: each repository's current HEAD)
+#   --share-memory      (experimental, Windows) link each worktree's auto-memory
+#                       to the source root's via a directory junction so all
+#                       sessions share one memory
+#   --push              push the new branch to origin and set upstream tracking
+#                       (only when the user explicitly asks; default is local)
 #   -h, --help          show this help
 #
 # Environment:
@@ -50,6 +55,11 @@ PREFIX="${TASK_BRANCH_PREFIX:-feat/}"
 BASE=""
 TASK=""
 REPOS=()
+SHARE_MEMORY=0
+MEMORY_SHARED=0
+PUSH=0
+PUSH_OK=0
+PUSH_FAILED=0
 
 # --- parse arguments ------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -59,6 +69,8 @@ while [ $# -gt 0 ]; do
     --tasks-root) TASKS_ROOT="$2"; shift 2 ;;
     --prefix)     PREFIX="$2";     shift 2 ;;
     --base)       BASE="$2";       shift 2 ;;
+    --share-memory) SHARE_MEMORY=1; shift ;;
+    --push)        PUSH=1;         shift ;;
     --)           shift; break ;;
     -*)           echo "task-new: unknown option: $1" >&2; usage >&2; exit 1 ;;
     *)            if [ -z "$TASK" ]; then TASK="$1"; else REPOS+=("$1"); fi; shift ;;
@@ -162,7 +174,32 @@ for repo in "${REPOS[@]}"; do
   else
     git -C "$repo" worktree add "$TASK_DIR/$(basename "$repo")" -b "$BRANCH" >/dev/null
   fi
+  if [ "$PUSH" -eq 1 ]; then
+    if git -C "$repo" push -u origin "$BRANCH"; then
+      PUSH_OK=1
+    else
+      PUSH_FAILED=1
+      echo "  WARN: push to origin failed for '$(basename "$repo")' (branch kept locally)" >&2
+    fi
+  fi
 done
+
+# --- optionally share auto-memory with the source session ------------------
+if [ "$SHARE_MEMORY" -eq 1 ]; then
+  if ! is_windows; then
+    echo "task-new: --share-memory is Windows-only; skipping" >&2
+  else
+    src_mem="$(memory_dir_for "$(cygpath -w "$SRC")")"
+    mkdir -p "$src_mem"
+    for repo in "${REPOS[@]}"; do
+      wt="$(memory_dir_for "$(cygpath -w "$TASK_DIR/$(basename "$repo")")")"
+      if share_memory "$wt" "$src_mem"; then
+        MEMORY_SHARED=1
+        echo "  shared memory: $(basename "$repo")"
+      fi
+    done
+  fi
+fi
 
 # --- leave a breadcrumb for the agent session ------------------------------
 {
@@ -176,6 +213,12 @@ done
   fi
   echo "- Created: $(date '+%Y-%m-%d %H:%M')"
   echo "- Source root: \`$SRC\`"
+  if [ "$MEMORY_SHARED" -eq 1 ]; then
+    echo "- Share memory: yes"
+  fi
+  if [ "$PUSH_OK" -eq 1 ]; then
+    echo "- Remote: pushed to \`origin/$BRANCH\`"
+  fi
   echo "- This folder is the agent session working directory."
   echo
   echo "## Repositories"
@@ -188,13 +231,11 @@ done
   echo "  via \`task-done.sh $TASK\`."
 } > "$TASK_DIR/README.md"
 
-case "$(uname -s)" in
-  MINGW*|MSYS*|CYGWIN*) is_windows=1 ;;
-  *) is_windows=0 ;;
-esac
-
 echo "workspace is ready: $TASK_DIR"
 echo "Start a session there with cd $TASK_DIR && claude."
-if [ "$is_windows" = 1 ]; then
+if is_windows; then
   echo "  Windows native: cd $(cygpath -w "$TASK_DIR") && claude."
+fi
+if [ "$PUSH_FAILED" -eq 1 ]; then
+  echo "warning: one or more branches failed to push (kept local)" >&2
 fi

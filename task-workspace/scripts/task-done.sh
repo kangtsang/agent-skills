@@ -179,6 +179,15 @@ for w in "${WORKTREES[@]}"; do
   fi
 done
 
+# --- unshare auto-memory (only if this task shared it) ---------------------
+if [ -f "$TASK_DIR/README.md" ] && grep -q 'Share memory: yes' "$TASK_DIR/README.md"; then
+  for w in "${WORKTREES[@]}"; do
+    link="$(memory_dir_for "$(cygpath -w "$w")")"
+    unshare_memory "$link"
+    rmdir "$(dirname "$link")" 2>/dev/null || true
+  done
+fi
+
 # --- clean up the task directory -------------------------------------------
 # Empty the task directory of stray files (IDE caches, the README breadcrumb,
 # etc.). A worktree kept by a failed removal above still holds its `.git`

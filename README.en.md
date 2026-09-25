@@ -55,10 +55,16 @@ remember script flags.
 /task-workspace start a task named add-payment
 /task-workspace create task hotfix-auth, branch from main
 /task-workspace create a workspace api-v2 with only the backend and frontend repos
+/task-workspace create task share-memory-demo with shared auto-memory
+/task-workspace create task push-demo, push to remote and track the remote branch
 ```
 
 The skill asks for the task name when it is missing, and confirms the source
 root, container location, and branch start point before creating anything.
+
+"Shared auto-memory" and "push to remote" are opt-in: by default the branch is
+local-only and memory is keyed per directory; they activate only when you ask
+for them (mapping to `--share-memory` / `--push` respectively).
 
 **List tasks**
 

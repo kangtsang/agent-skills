@@ -87,6 +87,12 @@ Details of `task-new.sh`:
 - It writes a `README.md` into the task directory recording the task name,
   branch, base, repositories, and the conventions below, so the session has
   the rules in front of it.
+- `--share-memory` links each worktree's auto-memory directory to the source
+  root's via a directory junction (Windows only), so all sessions in the task
+  share one memory. See "Sharing auto-memory" below.
+- By default the new branch is **local-only** (no upstream). `--push` pushes it
+  to `origin` and sets upstream tracking — only pass it when the user explicitly
+  asks to create/associate a remote branch; do not prompt for it otherwise.
 
 ## Working inside a task workspace
 
@@ -103,6 +109,29 @@ subfolders are git worktrees of different repositories), apply these rules:
   user's action (below).
 - If another session or process created the task workspace, follow the
   `README.md` inside it instead of creating a new one.
+
+## Sharing auto-memory across workspaces (experimental)
+
+By default each worktree is a *separate* Claude Code project: auto-memory is
+keyed to the working directory's absolute path, so a session in
+`E:\worktree-space\<task>\<repo>` does **not** see memories saved while working
+in the source root. `--share-memory` links each worktree's memory directory to
+the source root's with a directory junction (Windows only, no admin needed):
+
+```bash
+bash <skill-dir>/scripts/task-new.sh <task> --share-memory \
+  --src <source-root> --tasks-root <tasks-root>
+```
+
+`task-done.sh` removes the junction when finishing the task; the shared memory
+itself is never deleted (only the link). Caveats:
+
+- Relies on Claude Code's **undocumented** per-project directory layout
+  (`~/.claude/projects/<encoded-cwd>/memory`). If that layout or its path
+  encoding changes in a future release, sharing silently stops working.
+- Windows-only (uses directory junctions via PowerShell).
+- Prefer putting genuinely project-shared facts in the repo's `CLAUDE.md`,
+  which follows every worktree automatically and needs no mechanism.
 
 ## Finishing a task
 
