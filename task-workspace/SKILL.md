@@ -1,12 +1,12 @@
 ---
 name: task-workspace
-description: Create and manage isolated per-task git worktree workspaces that span multiple repositories under a source root, keeping the task container in a separate directory outside the source tree. Use whenever the user wants to start a new task or feature in a multi-repo workspace, asks to set up or clean up a task workspace / session workspace, wants agent sessions isolated from each other via git worktrees so commits never mix, or needs to merge and remove a finished task. When creating a task, ask the user where the task container should live (recommend a drive-root folder such as E:\worktree-space). Provides task-new / task-done / task-list / suggest-tasks-root scripts.
+description: Create and manage isolated per-task git worktree workspaces that span one or more repositories under a source root, keeping the task container in a separate directory outside the source tree. Use whenever the user wants to start a new task or feature in a single- or multi-repo workspace, asks to set up or clean up a task workspace / session workspace, wants agent sessions isolated from each other via git worktrees so commits never mix, or needs to merge and remove a finished task. When creating a task, ask the user where the task container should live (recommend a drive-root folder such as E:\worktree-space). Provides task-new / task-done / task-list / suggest-tasks-root scripts.
 ---
 
 # Task Workspace
 
 Isolate agent sessions per task using git worktrees, in a workspace root that
-contains several git repositories side by side. One task = one plain directory
+contains one or more git repositories side by side. One task = one plain directory
 holding a worktree of every relevant repository, all on the same branch, so a
 single agent session can edit across repositories while other sessions (and
 the source repositories themselves) stay untouched.
@@ -23,6 +23,9 @@ E:\worktree-space\                  ← task container: lives OUTSIDE the source
     ├── project_a\                  ← worktree, branch feat/fix-login
     └── project_b\                  ← worktree, branch feat/fix-login
 ```
+
+For a single repository the shape is the same: the source root is that one
+repository and the task directory holds a single worktree of it.
 
 Why this shape:
 
@@ -44,9 +47,10 @@ When the user asks to create a task workspace, follow this flow — do not run
 
 1. **Task name** — take it from the user's message; ask if it is missing.
 2. **Source root** — the directory containing the repositories, usually the
-   user's current directory. A git worktree checkout (its `.git` is a file)
-   is NOT a source root — ascend to the real one. Ask the user when it is
-   ambiguous.
+   user's current directory. If the current directory is itself a single git
+   repository (`.git` is a real directory), use it directly. A git worktree
+   checkout (its `.git` is a file) is NOT a source root — ascend to the real
+   one. Ask the user when it is ambiguous.
 3. **Recommended container location** — compute it:
    `bash <skill-dir>/scripts/suggest-tasks-root.sh <source-root>`
    This recommends a folder directly under the drive root of the source
@@ -73,9 +77,10 @@ When the user asks to create a task workspace, follow this flow — do not run
 
 Details of `task-new.sh`:
 
-- Without repo arguments it discovers every source repository under the
-  source root (a top-level subdirectory whose `.git` is a real directory;
-  worktree checkouts and `*.worktrees` folders are skipped).
+- Without repo arguments it discovers the source repositories: if the source
+  root is itself a git repository it is used directly; otherwise every
+  top-level subdirectory whose `.git` is a real directory is used (worktree
+  checkouts and `*.worktrees` folders are skipped).
 - With repo arguments it creates worktrees for only those repositories.
 - The new branch starts from each repository's current HEAD by default;
   pass `--base <ref>` to start from a specific commit/branch instead.

@@ -6,7 +6,8 @@
 # line), each checked out on a new branch <prefix><task>. The task
 # directory is a plain folder, not a git repo itself: the agent session
 # started there can edit and commit in each repository independently,
-# without touching any other session's files or branches.
+# without touching any other session's files or branches. If <source-root>
+# is itself a single git repository, that repository is used directly.
 #
 # The task container lives OUTSIDE the source root by design - nested
 # layouts are rejected so work and source stay isolated.
@@ -39,7 +40,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # --- defaults -------------------------------------------------------------
@@ -97,6 +98,11 @@ BRANCH="$PREFIX$TASK"
 # any *.worktrees directories.
 discover_repos() {
   local d name
+  # Single-repo source: the source root is itself a git repository.
+  if [ -d "$SRC/.git" ]; then
+    printf '%s\n' "$SRC"
+    return
+  fi
   for d in "$SRC"/*/; do
     [ -d "$d" ] || continue
     name="$(basename "$d")"
@@ -182,4 +188,13 @@ done
   echo "  via \`task-done.sh $TASK\`."
 } > "$TASK_DIR/README.md"
 
-echo "workspace ready $TASK_DIR"
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*) is_windows=1 ;;
+  *) is_windows=0 ;;
+esac
+
+echo "workspace is ready: $TASK_DIR"
+echo "Start a session there with cd $TASK_DIR && claude."
+if [ "$is_windows" = 1 ]; then
+  echo "  Windows native: cd $(cygpath -w "$TASK_DIR") && claude."
+fi
