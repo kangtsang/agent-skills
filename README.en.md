@@ -11,7 +11,7 @@ helper scripts it needs), following the same layout as the official
 
 | Skill | Description |
 | ----- | ----------- |
-| [task-workspace](task-workspace/SKILL.md) | Create and manage isolated per-task git worktree workspaces that span multiple repositories under a source root. |
+| [task-worktree-space](task-worktree-space/SKILL.md) | Create and manage isolated per-task git worktree workspaces that span multiple repositories under a source root. |
 
 ## Install
 
@@ -19,24 +19,24 @@ Copy (or symlink) the skill folder you want into your personal skills directory:
 
 ```bash
 # Linux / macOS
-cp -r task-workspace ~/.claude/skills/
+cp -r task-worktree-space ~/.claude/skills/
 
 # Windows (Git Bash)
-cp -r task-workspace "$USERPROFILE/.claude/skills/"
+cp -r task-worktree-space "$USERPROFILE/.claude/skills/"
 ```
 
 Or symlink it so you always get updates when you pull this repo:
 
 ```bash
-ln -s "$PWD/task-workspace" ~/.claude/skills/task-workspace
+ln -s "$PWD/task-worktree-space" ~/.claude/skills/task-worktree-space
 ```
 
 Restart Claude Code (or start a new session) and the skill will be available.
 
 ## Usage
 
-Each skill documents its own usage inside its `SKILL.md`. For `task-workspace`, the
-entry points are the scripts under `task-workspace/scripts/`:
+Each skill documents its own usage inside its `SKILL.md`. For `task-worktree-space`, the
+entry points are the scripts under `task-worktree-space/scripts/`:
 
 - `task-new.sh` — create a task workspace
 - `task-done.sh` — clean up / merge a finished task
@@ -49,7 +49,7 @@ The scripts are agent-agnostic; any agent that can run bash can use them
 directly:
 
 ```bash
-bash task-workspace/scripts/task-new.sh <task> --src <source-root> --tasks-root <container>
+bash task-worktree-space/scripts/task-new.sh <task> --src <source-root> --tasks-root <container>
 ```
 
 Create / list / finish and `--push` behave the same for every agent (see the
@@ -61,18 +61,18 @@ opencode / dsh / codex keep memory in in-repo AGENTS.md or global dirs, so
 
 ### Natural-language prompt examples
 
-Once installed, just invoke `/task-workspace` in plain language — no need to
+Once installed, just invoke `/task-worktree-space` in plain language — no need to
 remember script flags.
 
 **Create a task workspace**
 
 ```
-/task-workspace create a new workspace fix-login
-/task-workspace start a task named add-payment
-/task-workspace create task hotfix-auth, branch from main
-/task-workspace create a workspace api-v2 with only the backend and frontend repos
-/task-workspace create task share-memory-demo with shared auto-memory
-/task-workspace create task push-demo, push to remote and track the remote branch
+/task-worktree-space create a new workspace fix-login
+/task-worktree-space start a task named add-payment
+/task-worktree-space create task hotfix-auth, branch from main
+/task-worktree-space create a workspace api-v2 with only the backend and frontend repos
+/task-worktree-space create task share-memory-demo with shared auto-memory
+/task-worktree-space create task push-demo, push to remote and track the remote branch
 ```
 
 The skill asks for the task name when it is missing, and confirms the source
@@ -85,23 +85,24 @@ for them (mapping to `--share-memory` / `--push` respectively).
 **List tasks**
 
 ```
-/task-workspace list all task workspaces
+/task-worktree-space list all task workspaces
 ```
 
 **Finish / clean up**
 
 ```
-/task-workspace finish the fix-login task
-/task-workspace clean up the test workspace but keep the branch
-/task-workspace finish add-payment, merge into main and delete the branch
+/task-worktree-space finish the fix-login task
+/task-worktree-space clean up the test workspace but keep the branch
+/task-worktree-space finish add-payment, merge into main and delete the branch
 ```
 
-Merging, branch deletion, and stray-file cleanup (plans/notes not under git)
-are each confirmed first — cleanup lets you pick which stray files to keep; by
-default only the worktrees are removed and both branches and stray files are
-kept.
+Merging, branch deletion, and stray-file cleanup are each confirmed first —
+documents (plans/notes not under git) are archived to
+`archived-docs/<task>-<timestamp>`, build output and editor state are removed,
+and you can pick which entries to keep; by default only the worktrees are
+removed and both branches and stray files are kept.
 
-See [`task-workspace/SKILL.md`](task-workspace/SKILL.md) for the full workflow.
+See [`task-worktree-space/SKILL.md`](task-worktree-space/SKILL.md) for the full workflow.
 
 ## Adding a skill
 

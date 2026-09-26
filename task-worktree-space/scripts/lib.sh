@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for the task-workspace scripts.
+# Shared helpers for the task-worktree-space scripts.
 
 # Normalize a Windows (E:\x, E:/x) or POSIX path to a POSIX path.
 to_posix_path() {

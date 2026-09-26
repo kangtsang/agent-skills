@@ -21,10 +21,15 @@
 #   --target <b>    merge target branch (default: auto-detect from
 #                   origin/HEAD, then main, then master)
 #   --force         force-remove dirty worktrees and force-delete branches
-#   --clean-stray   delete stray files (non-git) left in the task directory
-#                   (default: keep them and list them)
-#   --keep <name>   with --clean-stray, keep this top-level stray entry
-#                   (repeatable; all other strays are deleted)
+#   --clean-stray   delete stray entries (non-git files) left in the task
+#                   directory (default: keep them and list them)
+#   --archive-docs  archive the user's own documents (anything that is not
+#                   build output or editor state) into archived-docs/ under
+#                   the container root, instead of deleting them
+#   --docs-dir <dir>  archive destination (default:
+#                     <tasks-root>/archived-docs/<task>-<timestamp>);
+#                     implies --archive-docs
+#   --keep <name>   keep this top-level stray entry (repeatable)
 #   --tasks-root <path>  task container root (default: $TASK_WORKSPACE_ROOT,
 #                   else the drive-root recommendation)
 #   -h, --help      show this help
@@ -40,6 +45,25 @@ usage() {
   awk 'NR>1 { if (/^#/) { sub(/^# ?/, ""); print } else exit }' "$0"
 }
 
+# Classify a stray entry: build output and editor state are disposable; the
+# rest is the user's own content (plans, notes, anything not git-managed) and
+# is worth archiving. Mirrors dsh-worktree-space's stray classification.
+stray_is_content() {
+  local name="$1" is_dir="$2"
+  if [ "$is_dir" = 1 ]; then
+    case "$name" in
+      node_modules|dist|build|out|output|target|bin|obj|coverage|.cache|.next|.nuxt|.turbo|.parcel-cache|__pycache__|.pytest_cache|.gradle|.m2|.venv|venv|vendor|.idea|.vscode|.vs)
+        return 1 ;;
+    esac
+    return 0
+  fi
+  case "$name" in
+    .DS_Store|Thumbs.db|desktop.ini|*.o|*.obj|*.pyc|*.pyo|*.class|*.tsbuildinfo|*.tmp|*.orig|*.rej|*.iml|*.swp|*.swo|*~)
+      return 1 ;;
+  esac
+  return 0
+}
+
 # --- defaults -------------------------------------------------------------
 TASKS_ROOT="${TASK_WORKSPACE_ROOT:-}"
 TASK=""
@@ -47,6 +71,8 @@ MERGE=0
 DELETE_BRANCH=0
 FORCE=0
 CLEAN_STRAY=0
+ARCHIVE_DOCS=0
+DOCS_DIR=""
 TARGET=""
 KEEP=()
 
@@ -59,6 +85,8 @@ while [ $# -gt 0 ]; do
     --delete-branch) DELETE_BRANCH=1; shift ;;
     --force)         FORCE=1;        shift ;;
     --clean-stray)   CLEAN_STRAY=1;  shift ;;
+    --archive-docs)  ARCHIVE_DOCS=1; shift ;;
+    --docs-dir)      DOCS_DIR="$2";  ARCHIVE_DOCS=1; shift 2 ;;
     --keep)          KEEP+=("$2");   shift 2 ;;
     --target)        TARGET="$2";    shift 2 ;;
     --tasks-root)    TASKS_ROOT="$2"; shift 2 ;;
@@ -200,12 +228,28 @@ if [ -f "$TASK_DIR/README.md" ] && grep -q 'Share memory: yes' "$TASK_DIR/README
 fi
 
 # --- clean up the task directory -------------------------------------------
-# Always remove the script's own README breadcrumb. Other stray files (agent-
-# generated plans/notes, IDE caches, ...) are kept by default and listed. With
-# --clean-stray they are deleted except for entries named by --keep, so the
-# caller can let the user choose what to retain. A worktree kept by a failed
-# removal above still holds its `.git` pointer and is left untouched.
+# Always remove the script's own README breadcrumb. Other stray entries are
+# kept by default and listed. --clean-stray deletes them; --archive-docs first
+# files the user's own content (not build output / editor state) into
+# archived-docs/ so plans and notes survive the cleanup. --keep names entries
+# to retain regardless. A worktree kept by a failed removal still holds its
+# `.git` pointer and is left untouched.
 rm -f "$TASK_DIR/README.md"
+
+if [ "$ARCHIVE_DOCS" -eq 1 ]; then
+  if [ -n "$DOCS_DIR" ]; then
+    docs_dir="$DOCS_DIR"
+  else
+    docs_dir="$(dirname "$TASK_DIR")/archived-docs/$(basename "$TASK_DIR")-$(date +%Y%m%d-%H%M%S)"
+  fi
+  # The archive must live outside the task directory, or the files moved there
+  # would be deleted moments later when the container is removed.
+  case "$docs_dir/" in
+    "$TASK_DIR/"*)
+      echo "task-done: --docs-dir must be outside the task directory: $docs_dir" >&2
+      exit 1 ;;
+  esac
+fi
 
 STRAY=()
 while IFS= read -r -d '' leftover; do
@@ -221,9 +265,26 @@ if [ ${#STRAY[@]} -gt 0 ]; then
     for k in "${KEEP[@]}"; do
       [ "$k" = "$name" ] && keep=1
     done
-    if [ "$CLEAN_STRAY" -eq 1 ] && [ "$keep" -eq 0 ]; then
-      rm -rf -- "$s" || true
-      echo "  removed: $name"
+    if [ "$keep" -eq 1 ]; then
+      kept+=("$s")
+      continue
+    fi
+
+    if [ "$CLEAN_STRAY" -eq 1 ] || [ "$ARCHIVE_DOCS" -eq 1 ]; then
+      is_dir=0
+      [ -d "$s" ] && is_dir=1
+      if [ "$ARCHIVE_DOCS" -eq 1 ] && stray_is_content "$name" "$is_dir"; then
+        if mkdir -p "$docs_dir" && cp -r -- "$s" "$docs_dir/"; then
+          rm -rf -- "$s"
+          echo "  archived: $name -> $docs_dir/"
+        else
+          kept+=("$s")
+          echo "  WARN: could not archive '$name'; kept in place" >&2
+        fi
+      else
+        rm -rf -- "$s" || true
+        echo "  removed: $name"
+      fi
     else
       kept+=("$s")
     fi

@@ -1,5 +1,5 @@
 ---
-name: task-workspace
+name: task-worktree-space
 description: Create and manage isolated per-task git worktree workspaces that span one or more repositories under a source root, keeping the task container in a separate directory outside the source tree. Use whenever the user wants to start a new task or feature in a single- or multi-repo workspace, asks to set up or clean up a task workspace / session workspace, wants agent sessions isolated from each other via git worktrees so commits never mix, or needs to merge and remove a finished task. When creating a task, ask the user where the task container should live (recommend a drive-root folder such as E:\worktree-space). Provides task-new / task-done / task-list / suggest-tasks-root scripts.
 ---
 
@@ -169,11 +169,12 @@ step with the user (AskUserQuestion) before running the script:
    `--delete-branch` (requires `--merge`).
 3. **Stray files?** List the task directory's top-level entries; anything that
    is not a worktree (a folder with a `.git` file) and not the `README.md`
-   breadcrumb is a stray file (agent-generated plans/notes, editor caches,
-   ...). If any exist, show them and ask the user (multi-select) which to
-   *keep*. Pass `--clean-stray` plus `--keep <name>` for each entry they keep;
-   if they keep nothing, pass just `--clean-stray`; if they keep everything,
-   pass neither.
+   breadcrumb is a stray file. Build output and editor state (`.idea`,
+   `node_modules`, `dist`, ...) are disposable; the rest is the user's own
+   documents (plans/notes). If there are documents, offer to archive them:
+   pass `--archive-docs` to file them under `archived-docs/<task>-<timestamp>`
+   in the container root (this also removes the disposable junk); add
+   `--keep <name>` for any entry the user wants left in place.
 
 Examples:
 
@@ -195,8 +196,10 @@ Details:
 - On a merge conflict it aborts the merge and keeps that worktree and branch
   for manual handling; other repositories still complete.
 - Stray files left in the task directory (e.g. agent plans/notes, `.idea`,
-  editor caches) are kept by default and listed. Pass `--clean-stray` to remove
-  them, adding `--keep <name>` for each entry to retain. A worktree kept on
+  editor caches) are kept by default and listed. `--clean-stray` removes them
+  (except `--keep` entries). `--archive-docs` files the user's own documents
+  into `archived-docs/<task>-<timestamp>` under the container root and removes
+  the rest; `--docs-dir <dir>` overrides the destination. A worktree kept on
   failure is left untouched.
 - `--no-merge` is an explicit alias for the default (no merge).
 - `--delete-branch` uses `git branch -d` (safe: refuses an unmerged branch)
