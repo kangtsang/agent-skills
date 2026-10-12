@@ -9,6 +9,7 @@
 | 技能 | 说明 |
 | ---- | ---- |
 | [task-worktree-space](task-worktree-space/SKILL.md) | 创建并管理跨多个仓库、按任务隔离的 git worktree 工作区，任务容器独立于源码目录存放。 |
+| [writing-docs](writing-docs/SKILL.md) | 撰写或修订文档与界面文案：代词与口语化的取舍、全称与简称的选择、对齐宿主产品自己的用语、改写既有已确认文案时的分寸，以及批量替换与验证的习惯——避免改写本身带进新缺陷。 |
 
 ## 安装
 

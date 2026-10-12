@@ -12,6 +12,7 @@ helper scripts it needs), following the same layout as the official
 | Skill | Description |
 | ----- | ----------- |
 | [task-worktree-space](task-worktree-space/SKILL.md) | Create and manage isolated per-task git worktree workspaces that span multiple repositories under a source root. |
+| [writing-docs](writing-docs/SKILL.md) | Write or revise documentation and UI copy (the skill itself is written in Chinese): pronoun and colloquialism judgement, full term vs abbreviation, matching a host product's own vocabulary, scope discipline when rewriting approved copy, and the batch-edit and verification habits that keep a rewrite from adding defects. |
 
 ## Install
 
