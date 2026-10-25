@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # task-new.sh - create an isolated task workspace for one task/feature.
 #
-# Creates <tasks-root>/<task>/ containing a git worktree of every source
-# repository under <source-root> (or only the repos named on the command
-# line), each checked out on a new branch <prefix><task>. The task
-# directory is a plain folder, not a git repo itself: the agent session
-# started there can edit and commit in each repository independently,
-# without touching any other session's files or branches. If <source-root>
-# is itself a single git repository, that repository is used directly.
+# Creates <tasks-root>/<project>/<task>/ holding a git worktree of every source
+# repository under <source-root> (or only the repos named on the command line),
+# each checked out on a new branch <prefix><task>. The project layer is the
+# source root's own directory name, so two projects can hold tasks of the same
+# name without colliding. The task directory is a plain folder, not a git repo
+# itself: the agent session started there can edit and commit in each repository
+# independently, without touching any other session's files or branches. If
+# <source-root> is itself a single git repository, that repository is used
+# directly.
 #
-# The task container lives OUTSIDE the source root by design - nested
-# layouts are rejected so work and source stay isolated.
+# The task container lives OUTSIDE the source root by design - nested layouts
+# are rejected so work and source stay isolated.
 #
 # Usage:
 #   task-new.sh <task-name> [repo ...] [options]
@@ -25,7 +27,7 @@
 #   --tasks-root <path> task container root (default: $TASK_WORKSPACE_ROOT,
 #                       else the drive-root recommendation, see
 #                       suggest-tasks-root.sh / default_tasks_root)
-#   --prefix <p>        branch prefix (default: feat/)
+#   --prefix <p>        branch prefix (default: task/)
 #   --base <ref>        start-point for the new branch in each repository
 #                       (default: each repository's current HEAD)
 #   --share-memory      link each worktree's auto-memory to the source root's
@@ -33,7 +35,9 @@
 #   --agent <name>      agent whose memory hook to use for --share-memory
 #                       (default: claude, or $TASK_WORKSPACE_AGENT)
 #   --push              push the new branch to origin and set upstream tracking
-#                       (only when the user explicitly asks; default is local)
+#                       (only when the user explicitly asks; default is local).
+#                       A rollback only removes the local branch - a branch
+#                       already pushed stays on the remote.
 #   -h, --help          show this help
 #
 # Environment:
@@ -52,7 +56,7 @@ usage() {
 # --- defaults -------------------------------------------------------------
 SRC="${TASK_WORKSPACE_SRC:-$(pwd)}"
 TASKS_ROOT="${TASK_WORKSPACE_ROOT:-}"
-PREFIX="${TASK_BRANCH_PREFIX:-feat/}"
+PREFIX="${TASK_BRANCH_PREFIX:-task/}"
 BASE=""
 TASK=""
 REPOS=()
@@ -62,6 +66,13 @@ MEMORY_SHARED=0
 PUSH=0
 PUSH_OK=0
 PUSH_FAILED=0
+
+# What this run made, so a failure can take back exactly that and nothing else.
+CREATED_REPOS=()
+CREATED_WORKTREES=()
+CREATED_BRANCHES=()
+TASK_DIR_CREATED=0
+PROJECT_DIR_CREATED=0
 
 # --- parse arguments ------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -85,11 +96,7 @@ if [ -z "$TASK" ]; then
   usage >&2
   exit 1
 fi
-case "$TASK" in
-  */*|*\\*|*[[:space:]]*)
-    echo "task-new: task name must not contain /, \\ or whitespace: $TASK" >&2
-    exit 1 ;;
-esac
+require_valid_task_name "$TASK"
 
 # Normalize paths (E:\foo and E:/foo both work).
 SRC="$(to_posix_path "$SRC")"
@@ -100,11 +107,21 @@ if [ -z "$TASKS_ROOT" ]; then
   echo "tasks root (default): $TASKS_ROOT"
 fi
 TASKS_ROOT="$(to_posix_path "$TASKS_ROOT")"
+TASKS_ROOT="${TASKS_ROOT%/}"
 
-# Work and source must not nest inside each other.
+# Work and source must not nest inside each other, and the container must not be
+# a repository or sit inside one.
 require_isolated "$SRC" "$TASKS_ROOT" || exit 1
+require_container_ok "$TASKS_ROOT" || exit 1
 
-TASK_DIR="$TASKS_ROOT/$TASK"
+PROJECT="$(project_name_for "$SRC")"
+if [ -z "$PROJECT" ] || [ "$PROJECT" = "/" ] || [ "$PROJECT" = "." ] || [ "$PROJECT" = ".." ]; then
+  echo "task-new: the source root has no usable directory name: $SRC" >&2
+  exit 1
+fi
+
+PROJECT_DIR="$TASKS_ROOT/$PROJECT"
+TASK_DIR="$PROJECT_DIR/$TASK"
 BRANCH="$PREFIX$TASK"
 
 # --- discover source repositories ------------------------------------------
@@ -167,22 +184,80 @@ if [ -n "$BASE" ]; then
   done
 fi
 
-# --- create worktrees ------------------------------------------------------
-mkdir -p "$TASKS_ROOT"
-mkdir "$TASK_DIR"
+# --- rollback --------------------------------------------------------------
+# Undo what this run made: the worktrees it created, the branches it created,
+# and the directories it created. Nothing that existed before is touched - the
+# validation above refused to start if the task directory or any branch was
+# already there. A step that cannot be undone is named rather than hidden.
+rollback() {
+  local rc=$? i repo wt br
+  trap - EXIT
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+  echo "error: creating the task space failed; rolling back what this run made" >&2
+  for (( i=${#CREATED_REPOS[@]}-1; i>=0; i-- )); do
+    repo="${CREATED_REPOS[$i]}"
+    wt="${CREATED_WORKTREES[$i]}"
+    br="${CREATED_BRANCHES[$i]}"
+    # Ask git first; it knows whether the worktree was ever registered. If the
+    # removal fails, the directory is removed directly and the stale
+    # registration pruned - otherwise the branch would still count as checked
+    # out there and could not be deleted.
+    if ! git -C "$repo" worktree remove --force "$wt" >/dev/null 2>&1; then
+      if [ -d "$wt" ]; then
+        if require_direct_child "$TASK_DIR" "$wt" && require_real_dir "$wt"; then
+          rm -rf -- "$wt" || echo "  left behind: $wt (remove it by hand)" >&2
+        else
+          echo "  left behind: $wt (remove it by hand)" >&2
+        fi
+      fi
+      git -C "$repo" worktree prune >/dev/null 2>&1 || true
+    fi
+    if git -C "$repo" show-ref --verify --quiet "refs/heads/$br"; then
+      if ! git -C "$repo" branch -D -- "$br" >/dev/null 2>&1; then
+        echo "  left behind: branch $br in $repo (delete it by hand)" >&2
+      fi
+    fi
+  done
+  if [ "$TASK_DIR_CREATED" -eq 1 ]; then
+    rmdir -- "$TASK_DIR" 2>/dev/null || true
+  fi
+  if [ "$PROJECT_DIR_CREATED" -eq 1 ]; then
+    rmdir -- "$PROJECT_DIR" 2>/dev/null || true
+  fi
+  exit "$rc"
+}
+
+# --- create ----------------------------------------------------------------
+mkdir -p -- "$TASKS_ROOT"
+ensure_container_readme "$TASKS_ROOT"
+if [ ! -d "$PROJECT_DIR" ]; then
+  mkdir -p -- "$PROJECT_DIR"
+  PROJECT_DIR_CREATED=1
+fi
+trap rollback EXIT
+mkdir -- "$TASK_DIR" || exit 1
+TASK_DIR_CREATED=1
+
 for repo in "${REPOS[@]}"; do
-  echo "worktree: $(basename "$repo") -> $TASK_DIR/$(basename "$repo") [$BRANCH from ${BASE:-HEAD}]"
+  name="$(basename "$repo")"
+  worktree="$TASK_DIR/$name"
+  echo "worktree: $name -> $worktree [$BRANCH from ${BASE:-HEAD}]"
+  CREATED_REPOS+=("$repo")
+  CREATED_WORKTREES+=("$worktree")
+  CREATED_BRANCHES+=("$BRANCH")
   if [ -n "$BASE" ]; then
-    git -C "$repo" worktree add "$TASK_DIR/$(basename "$repo")" -b "$BRANCH" "$BASE" >/dev/null
+    git -C "$repo" worktree add "$worktree" -b "$BRANCH" "$BASE" >/dev/null || exit 1
   else
-    git -C "$repo" worktree add "$TASK_DIR/$(basename "$repo")" -b "$BRANCH" >/dev/null
+    git -C "$repo" worktree add "$worktree" -b "$BRANCH" >/dev/null || exit 1
   fi
   if [ "$PUSH" -eq 1 ]; then
     if git -C "$repo" push -u origin "$BRANCH"; then
       PUSH_OK=1
     else
       PUSH_FAILED=1
-      echo "  WARN: push to origin failed for '$(basename "$repo")' (branch kept locally)" >&2
+      echo "  WARN: push to origin failed for '$name' (branch kept locally)" >&2
     fi
   fi
 done
@@ -205,6 +280,7 @@ fi
 {
   echo "# Task: $TASK"
   echo
+  echo "- Project: \`$PROJECT\`"
   echo "- Branch: \`$BRANCH\` (one branch per repository below)"
   if [ -n "$BASE" ]; then
     echo "- Base: \`$BASE\`"
@@ -213,6 +289,7 @@ fi
   fi
   echo "- Created: $(date '+%Y-%m-%d %H:%M')"
   echo "- Source root: \`$SRC\`"
+  echo "- Layout: \`$TASK_DIR\`"
   echo "- Agent: \`$AGENT\`"
   if [ "$MEMORY_SHARED" -eq 1 ]; then
     echo "- Share memory: yes"
@@ -228,9 +305,11 @@ fi
   echo "## Conventions"
   echo "- Commit in each repository separately (same branch name everywhere)."
   echo "- Source repositories are read-only: never edit or commit there."
-  echo "- Merging back to the main branch is done by the user, not the agent,"
-  echo "  via \`task-done.sh $TASK\`."
+  echo "- Finish with \`task-done.sh $PROJECT/$TASK --tasks-root $(printf '%q' "$TASKS_ROOT")\`;"
+  echo "  by default it removes the worktrees and keeps the branch and stray files."
 } > "$TASK_DIR/README.md"
+
+trap - EXIT
 
 echo "workspace is ready: $TASK_DIR"
 echo "Start a session there with cd $TASK_DIR && $AGENT."
